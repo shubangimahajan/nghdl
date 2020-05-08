@@ -861,7 +861,7 @@ void Compute()			//Function that performs main computation based on current inst
 
 /************************************************************************************************/
  
-//      ASR BY SM                06/05/20
+//      ASR BY SM   on  06/05/20          Modified on 9/05/20
         else if(b1==0x9 && b2>=4 && b4==5)
         {	
 		GPR[17].data=0x19;
@@ -873,10 +873,21 @@ void Compute()			//Function that performs main computation based on current inst
                 }
                 
                 
-     		SREG[0].data=GPR[k].data & 1;
+     		SREG[0].data=GPR[k].data & 1;            // set or reset carry flag
                 char l=GPR[k].data & 10000000;
 	    	GPR[k].data=((GPR[k].data) >> 1) | l;
-		
+               // update flags
+		if (GPR[k]==0)
+			SREG[1].data=1;                  // zero flag
+		else
+			SREG[1].data=0;
+		if (l==10000000)
+			SREG[2].data=1;			//negative flag
+		else
+			SREG[2].data=0;
+		SREG[3].data=SREG[0].data ^ SREG[2].data;	//overflow flag
+		SREG[4].data=SREG[3].data ^ SREG[2].data;	//signed flag
+
                 PC += 0x2;
                 printf("\nAfter execution: Reg[%d] = %d\n",k,GPR[k].data);
         }
@@ -897,7 +908,7 @@ void Compute()			//Function that performs main computation based on current inst
         }
 
 /************************************************************************************************/
-//      CLR BY SM                5/05/20
+//      CLR BY SM  on   5/05/20      Modified on 9/05/20
         else if(b1==2 && b2>=4)
         {
 		unsigned char R=b3*16+b2;
@@ -907,6 +918,13 @@ void Compute()			//Function that performs main computation based on current inst
                 }
      		
 		GPR[R].data = GPR[R].data^GPR[R].data ;
+
+		//update flags
+		SREG[1].data=1;
+		SREG[2].data=0;
+		SREG[3].data=0;
+		SREG[4].data=0;
+
                 PC += 0x2;
                 printf("\nAfter execution: Reg[%d] = %x\n",R,GPR[R].data);
         }
@@ -1004,7 +1022,7 @@ void Compute()			//Function that performs main computation based on current inst
 	}
 
 /************************************************************************************************/	
-//	CPC by SM		06/05/20
+//	CPC by SM on    06/05/20     Modified on 9/05/20  still needs to b modified further
 
 	else if(b1==0x0 && b2>=4)
 	{
@@ -1017,8 +1035,10 @@ void Compute()			//Function that performs main computation based on current inst
 	    char d=(b2&1)*16+b3;
 	    char c=SREG[0].data;
 	    //Comparing Rd and Rrwith carry (Reg data doesn't have to be modified)
+
+	    //update flags
 	    if(GPR[d].data < (GPR[r].data + c)){
-	    	SREG[0].data = 1;	//set carry flag
+	    	SREG[0].data = 1;				//set carry flag
 		if(debugMode == 1){
 			printf("\nCarry flag set\n");
                         }}
@@ -1027,16 +1047,16 @@ void Compute()			//Function that performs main computation based on current inst
 		if(debugMode == 1){
 			printf("\nCarry flag reset\n");
 			}}
+
 	    if(GPR[d].data - GPR[r].data - c == 0){
-	    	SREG[1].data = 1;	//set zero flag
-		if(debugMode == 1)
-			printf("\nZero flag set\n");
-                        }
-            else{
-	    	SREG[1].data = 0;
-                if(debugMode == 1){
-			printf("\nZero flag reset\n");
-			}}
+	    	SREG[1].data = SREG[1].data;		      //unchanged zero flag
+	    else
+		SREG[1].data=0;
+	    if (GPR[d].data>=128)			       // negative flag	
+		SREG[2].data=1;
+	    else
+		SREG[2].data=0;
+
 	    PC += 0x2;
 	}
 
