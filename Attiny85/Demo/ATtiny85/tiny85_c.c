@@ -877,7 +877,7 @@ void Compute()			//Function that performs main computation based on current inst
                 char l=GPR[k].data & 10000000;
 	    	GPR[k].data=((GPR[k].data) >> 1) | l;
                // update flags
-		if (GPR[k]==0)
+		if (GPR[k].data==0)
 			SREG[1].data=1;                  // zero flag
 		else
 			SREG[1].data=0;
@@ -1010,19 +1010,64 @@ void Compute()			//Function that performs main computation based on current inst
 /************************************************************************************************/	
 //	CP by SB		27/03/20
 //	Modified by AJ	5/4/20
+//      Modified by SM  11/5/20
+
 	else if(b1==0x1 && b2>=4 && b2<=7)
 	{
+	        GPR[17].data=0x99;
+	        GPR[0].data=0xf0;
 		if(debugMode==1)
 	    	printf("CP instruction decoded\n");
 	    //Comparing Rd and Rr (Reg data doesn't have to be modified)
-	    if(GPR[b3+16].data - GPR[b4+16].data == 0)
+            
+	    unsigned char r=((b2>>1)&1)*16+b4;
+	    unsigned char d=(b2&1)*16+b3;
+
+           if(debugMode == 1)
+		printf("\n%X - %X = %d\n",GPR[d].data,GPR[r].data,GPR[d].data -GPR[r].data);
+
+	    //UPDATE FLAGS
+	    if(GPR[d].data < (GPR[r].data))
+	    	SREG[0].data = 1;				// carry flag
+            else
 	    	SREG[0].data = 0;
+
+	    if(GPR[d].data - GPR[r].data == 0)
+	    	SREG[1].data = 1;		      		//zero flag
+	    else
+		SREG[1].data=0;
+
+	    unsigned char dl=GPR[d].data & 0x80;
+	    unsigned char rl=GPR[r].data & 0x80;
+            unsigned char fl=(GPR[d].data - GPR[r].data) & 0x80;
+	    if (fl==0x80)					// negative flag	
+		SREG[2].data=1;
+	    else
+		SREG[2].data=0;
+
+	    unsigned char f=(GPR[d].data & 0xf); 		//half carry flag
+            unsigned char g=(GPR[r].data & 0xf);
+	    printf("%x,%x",f,g);
+	    if (f<g)
+		SREG[5].data=1;
+	    else
+		SREG[5].data=0;
+								//overflow flag
+	    if(dl==0 && rl==0x80 && fl==0x80)	
+		SREG[3].data=1;
+	    else if(dl==0x80 && rl==0 && fl==0)
+		SREG[3].data=1;
+	    else
+		SREG[3].data=0;
+	    
+	    SREG[4].data=SREG[3].data ^ SREG[2].data;		//signed flag
+
 
 	    PC += 0x2;
 	}
 
 /************************************************************************************************/	
-//	CPC by SM on    06/05/20     Modified on 9/05/20  still needs to b modified further
+//	CPC by SM on    06/05/20     Modified on 9/05/20  Modified on 11/05/2020
 
 	else if(b1==0x0 && b2>=4)
 	{
@@ -1031,57 +1076,100 @@ void Compute()			//Function that performs main computation based on current inst
 	    GPR[1].data=0x19;
 	    if(debugMode==1)
 	    printf("CPC instruction decoded\n");
-            char r=((b2>>1)&1)*16+b4;
-	    char d=(b2&1)*16+b3;
-	    char c=SREG[0].data;
-	    //Comparing Rd and Rrwith carry (Reg data doesn't have to be modified)
+            unsigned char r=((b2>>1)&1)*16+b4;
+	    unsigned char d=(b2&1)*16+b3;
+	    unsigned char c=SREG[0].data;
+		
+	    if(debugMode == 1)
+		printf("carry flag=%X",c);
+		printf("\n%X - %X -%X = %d\n",GPR[d].data,GPR[r].data,c,GPR[d].data -GPR[r].data- c);
 
-	    //update flags
-	    if(GPR[d].data < (GPR[r].data + c)){
-	    	SREG[0].data = 1;				//set carry flag
-		if(debugMode == 1){
-			printf("\nCarry flag set\n");
-                        }}
-            else{
+	    //UPDATE FLAGS
+	    if(GPR[d].data < (GPR[r].data + c))			// carry flag
+	    	SREG[0].data = 1;				
+            else
 	    	SREG[0].data = 0;
-		if(debugMode == 1){
-			printf("\nCarry flag reset\n");
-			}}
 
-	    if(GPR[d].data - GPR[r].data - c == 0){
-	    	SREG[1].data = SREG[1].data;		      //unchanged zero flag
+	    if(GPR[d].data - GPR[r].data - c == 0)		//unchanged zero flag
+	    	SREG[1].data = SREG[1].data;		      
 	    else
 		SREG[1].data=0;
-	    if (GPR[d].data>=128)			       // negative flag	
+            
+	    unsigned char dl=GPR[d].data & 0x80;
+	    unsigned char rl=GPR[r].data & 0x80;
+            unsigned char fl=(GPR[d].data - GPR[r].data - c) & 0x80;
+	    if (fl== 0x80)					// negative flag	
 		SREG[2].data=1;
 	    else
 		SREG[2].data=0;
+
+	    unsigned char f=GPR[d].data & 0xf; 			//half carry flag
+            unsigned char g=GPR[r].data & 0xf;
+	    if (f<(g+c))
+		SREG[5].data=1;
+	    else
+		SREG[5].data=0;
+								//overflow flag
+	    if(dl==0 && rl==0x80 && fl==0x80)	
+		SREG[3].data=1;
+	    else if(dl==0x80 && rl==0 && fl==0)
+		SREG[3].data=1;
+	    else
+		SREG[3].data=0;
+	    
+	    SREG[4].data=SREG[3].data ^ SREG[2].data;		//signed flag
 
 	    PC += 0x2;
 	}
 
 /************************************************************************************************/
 //	CPI by AJ	27/04/2020
+//      Modified by SM   11/05/2020
 	else if(b1==0x03)
 	{
+	   GPR[21].data=0xf0;
 	   if(debugMode==1)
-	    printf("\nCPI instruction decoded\n");
-		unsigned char k = b2*16 + b4;
-		if(debugMode == 1)
-				printf("\n%X - %X = %d\n",GPR[b3+16].data,k,GPR[b3+16].data - k);
+	    	printf("\nCPI instruction decoded\n");
+	   unsigned char k = b2*16 + b4;
+	   if(debugMode == 1)
+		printf("\n%X - %X = %d\n",GPR[b3+16].data,k,GPR[b3+16].data - k);
 
-		if(GPR[b3+16].data == k)
-			{
-				SREG[1].data = 1;
-				if(debugMode == 1)
-					printf("\nZero flag set: %d\n",SREG[1].data);
-			}
-		else if(GPR[b3+16].data != k)
-			{
-				SREG[1].data = 0;
-				if(debugMode == 1)
-					printf("\nZero flag reset\n");
-			}
+	//UPDATE FLAGS
+
+	   if(GPR[b3+16].data == k)					// zero flag
+		SREG[1].data = 1;
+       	   else if(GPR[b3+16].data != k)
+		SREG[1].data = 0;
+	    
+	    if(GPR[b3+16].data < k)					// carry flag
+	    	SREG[0].data = 1;				
+            else
+	    	SREG[0].data = 0;
+
+	    unsigned char rl=GPR[b3+16].data & 0x80;
+	    unsigned char kl=k & 0x80;
+	    unsigned char fl=GPR[b3+16].data-k & 0x80;
+	    if (fl==0x80)			       			// negative flag	
+		SREG[2].data=1;
+	    else
+		SREG[2].data=0;
+
+	    unsigned char f=GPR[b3+16].data & 0xf; 			//half carry flag
+            k= k & 0xf;
+	    if (f<k)
+		SREG[5].data=1;
+	    else
+		SREG[5].data=0;
+									//overflow flag
+	    if(rl==0 && kl==0x80 && fl==0x80)	
+		SREG[3].data=1;
+	    else if(rl==0x80 && kl==0 && fl==0)
+		SREG[3].data=1;
+	    else
+		SREG[3].data=0;
+	    
+	    SREG[4].data=SREG[3].data ^ SREG[2].data;			//signed flag
+
 	    PC += 0x2;
 	}
 
@@ -1253,6 +1341,62 @@ void Compute()			//Function that performs main computation based on current inst
 		char temp=0x0;
 		if(debugMode==1)
 			printf("\nBRCS instruction decoded\n");
+		if(SREG[0].data == 1)
+		{	PC=0x3A;
+			//For getting Kbits
+			Hex2Bin(0,b2);
+			Hex2Bin(1,b3);
+			Hex2Bin(2,b4);
+			kbits[6] = bin[0].arr[1];
+			kbits[5] = bin[0].arr[0];
+			for(i=0;i<4;i++)
+				kbits[i+1] = bin[1].arr[i];
+			kbits[0] = bin[2].arr[3];
+
+			if(kbits[6] == 1)	//Signed bit set (k is negative)
+			{
+				for(i=0;i<6;i++)
+					temp += kbits[i]*pow(2,i);
+				temp -= 0x01;
+				i=0;
+				while(temp!=0 && i<=6)
+				{
+					kbits[i] = temp % 2;
+					i++;
+					temp /= 2;
+				}
+				for(i=0;i<6;i++)
+					kbits[i] = !kbits[i];
+
+				for(i=0;i<6;i++)
+					jump += kbits[i]*pow(2,i);
+				jump *= 2;
+			}
+			else
+			{
+				for(i=0;i<6;i++)
+					jump += kbits[i]*pow(2,i);
+				jump *= -2;
+			}
+			if(debugMode == 1)
+				printf("\nJumping to PC: %X",PC+jump+0x02);
+			PC += jump + 0x02;
+
+		}
+		else
+			PC += 0x2;
+
+	}
+
+/************************************************************************************************/
+//	BRLO by SM		 11/5/2020
+	else if(b1==0xf && b2>=0 && b2<=3 && (b4 == 0x08 || b4 == 0x00))
+	{	PC=0x3A;					//JUMP TO 2A,OPCODE=F048 K=9
+		SREG[0].data = 1;		
+		int kbits[7],jump=0;
+		char temp=0x0;
+		if(debugMode==1)
+			printf("\nBRLO instruction decoded\n");
 		if(SREG[0].data == 1)
 		{	PC=0x3A;
 			//For getting Kbits
