@@ -907,7 +907,7 @@ void Compute()			//Function that performs main computation based on current inst
                 printf("\nAfter execution: Reg[%d] = %x\n",b3+16,GPR[b3+16].data);
         }
 
-/************************************************************************************************/
+/***********************************************************************************************
 //      CLR BY SM  on   5/05/20      Modified on 9/05/20
         else if(b1==2 && b2>=4)
         {
@@ -1005,6 +1005,86 @@ void Compute()			//Function that performs main computation based on current inst
 	    	printf("\nAfter execution: IOREG[%X]: %X",t,IOREG[t].data);
 
 	    PC += 0x02;
+	}
+
+/************************************************************************************************/	
+//	AND by SM  		12/5/20
+
+	else if(b1==0x2 && b2>=0 && b2<=3)
+	{
+	        GPR[0].data=0x00;
+	        GPR[31].data=0xff;
+		if(debugMode==1)
+	    	printf("AND instruction decoded\n");
+
+            
+	    unsigned char r=((b2>>1)&1)*16+b4;
+	    unsigned char d=(b2&1)*16+b3;
+
+           if(debugMode == 1)
+		printf("\n%X & %X = %X\n",GPR[d].data,GPR[r].data,GPR[d].data & GPR[r].data);
+
+	  GPR[d].data = GPR[d].data & GPR[r].data;
+
+	    //UPDATE FLAGS
+
+	    if(GPR[d].data == 0X0)
+	    	SREG[1].data = 1;		      		//zero flag
+	    else
+		SREG[1].data=0;
+
+	    unsigned char dl=GPR[d].data & 0x80;
+	    if (dl==0x80)					// negative flag	
+		SREG[2].data=1;
+	    else
+		SREG[2].data=0;
+								
+	    SREG[3].data=0;					//overflow flag
+	    
+	    SREG[4].data=SREG[3].data ^ SREG[2].data;		//signed flag
+
+
+	    PC += 0x2;
+	}
+
+/************************************************************************************************/	
+//	EOR by SM  		12/5/20
+
+	else if(b1==0x2 && b2>=4 && b2<=7)
+	{
+	        GPR[0].data=0xff;
+	        GPR[31].data=0xff;
+		if(debugMode==1)
+	    	printf("EOR instruction decoded\n");
+
+            
+	    unsigned char r=((b2>>1)&1)*16+b4;
+	    unsigned char d=(b2&1)*16+b3;
+
+           if(debugMode == 1)
+		printf("\n%X ^ %X = %X\n",GPR[d].data,GPR[r].data,GPR[d].data ^ GPR[r].data);
+
+	  GPR[d].data = GPR[d].data ^ GPR[r].data;
+
+	    //UPDATE FLAGS
+
+	    if(GPR[d].data == 0)
+	    	SREG[1].data = 1;		      		//zero flag
+	    else
+		SREG[1].data=0;
+
+	    unsigned char dl=GPR[d].data & 0x80;
+	    if (dl==0x80)					// negative flag	
+		SREG[2].data=1;
+	    else
+		SREG[2].data=0;
+								
+	    SREG[3].data=0;					//overflow flag
+	    
+	    SREG[4].data=SREG[3].data ^ SREG[2].data;		//signed flag
+
+
+	    PC += 0x2;
 	}
 
 /************************************************************************************************/	
