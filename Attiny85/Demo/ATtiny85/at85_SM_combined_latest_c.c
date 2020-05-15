@@ -860,7 +860,7 @@ void Compute()			//Function that performs main computation based on current inst
            	printf("ICALL instruction decoded\n");
 
 	int k=PC+2;
-	k=0xffa;	
+	// k=0xffa;					FOR TESTING
 	ISRAM[SP-1].data=k;				//lower 8 bits
 	ISRAM[SP].data=k>>8;				//upper 8 bits
 	//  printf("sram=%x,%x",ISRAM[SP].data,ISRAM[SP-1].data);
