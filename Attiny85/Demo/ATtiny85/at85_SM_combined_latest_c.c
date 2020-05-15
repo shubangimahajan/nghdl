@@ -1,27 +1,26 @@
 /* This C Code for ATTINY series (specifically ATTINY85) was developed by ASHUTOSH JHA
    Further modifications by Saurabh Bansode
-   Latest edit - 8:00 PM, 3/5/2020 by AJ - 
-   1.	Changed how the way RAM works to most accurate depiction
-   2.	Modified BRNE,RJMP instructions to most accurate
-   3.	Added I/O register file
-   4.	Changed reg to GPR (General Purpose Register), RAM to prog_mem
-   5. 	Added Timer0 FastPWM inverting Mode
 
-   **NOTE	:-	The functions "MapToRam", "output" and "input" &
+				****!!! LATEST EDIT - 3:45 PM, 10/5/2020 by AJ ****!!! 
+
+	1. Timer0 FastPWM inverting and non-inverting mode added
+	2. Bin_Add, UpdateSREG are deprecated and removed for use
+	3. Modified ADD,ADC,SUB,SUBI,SBCI instructions
+
+   **NOTE	:-	The functions "MapToRam" and "output" &
    				the variables PB0 ... PB5 
    				linked to the VHDL code of ATTINY85
    				by "ghdl_access.vhdl" file.	*/ 
-
-// ************!!    LATEST    ************!!    
+   
 
 #include<stdio.h>
 #include<math.h>
-#define size 8192		//8kb ram size for attiny 85
+#define size 4096		//4kb program memory for attiny85
 
-int debugMode=1;
+int debugMode=1,zero_flag=0;
 int PB0,PB1,PB2,PB3,PB4,PB5,wait_Clocks=0;
-char PC=0;
-int SP=512;             //IOREG[29]+IOREG[30]*256;
+int PC=0;
+char SP=512;			//IOREG[29]+IOREG[30]*256;
 struct memory			//Structure to store RAM and other registers
 {
 	unsigned char data;
@@ -66,8 +65,6 @@ int * get_ptr5() {
 int * wait_cycles() {
   return &wait_Clocks;
 }
-
-
 
 void ClearBins(int binSel)
 {
@@ -126,6 +123,7 @@ void Hex2Bin(int binSel,int hex)			//Function to convert hex number to binary ar
 	        i++;
 	        hex /= 2;
 	    }
+	    
 }
 
 
@@ -156,65 +154,6 @@ void TwosComp(int binSel)			//Function to get 2's complement
     
 }
 
-void Bin_Add(int a, int b, int c,int select,int withCarry)			//Function to perform binary addition
-{
-    int i,t;
-    for(i=0;i<8;i++)
-	    {
-	    	if(i==0 && withCarry == 0)
-	    	{
-	    		t = bin[b].arr[i] + bin[a].arr[i];
-	        	bin[c].arr[i] = bin[a].arr[i] ^ bin[b].arr[i];	
-	    	}
-	    	else
-	    	{
-	    		t = bin[b].arr[i] + bin[a].arr[i] + SREG[0].data;
-	        	bin[c].arr[i] = bin[a].arr[i] ^ bin[b].arr[i] ^ SREG[0].data;
-	    	}
-	        
-	        if(t<=1)
-	        {
-	            SREG[0].data = 0;
-	            printf("\nCarry bit is reset\n");
-	        }
-	        else
-	        {
-	        	SREG[0].data = 1;
-	        	printf("\nCarry bit is set\n");
-	        	if(i==3)
-	        		{
-	        			SREG[5].data = 1;
-	        			printf("\nHalf Carry bit is set\n");
-	        		}
-	        	else if(i==7)
-	        		{
-	        			SREG[2].data = 0;
-	        			//printf("\nNegative bit is reset\n");
-	        		}
-	        }
-	    }
-	    
-	int t0=bin[c].arr[0],t1=bin[c].arr[1],t2=bin[c].arr[2],t3=bin[c].arr[3];
-	for(i=0;i<4;i++)
-	{
-	    bin[c].arr[i]=bin[c].arr[4+i];
-	}
-
-	bin[c].arr[4]=t0;
-	bin[c].arr[5]=t1;
-	bin[c].arr[6]=t2;
-	bin[c].arr[7]=t3;
-	    
-	    if(select == 1)
-	    {
-	        SREG[5].data = !SREG[5].data;
-	        SREG[2].data = !SREG[0].data;
-	        SREG[0].data = !SREG[0].data;
-	    }
-}
-
-
-
 void SetPins(int flag)			//Function to set/reset the I/O pins
 {
 	if(flag == 1)
@@ -234,9 +173,7 @@ void SetPins(int flag)			//Function to set/reset the I/O pins
 	    PB3 = bin[3];
 	    PB4 = bin[4];
 	    PB5 = bin[5];
-	}
-	
-
+	}	
 }
 
 void MapToRam(int flag)				//Function to map the external hex file contents into this C code
@@ -286,38 +223,6 @@ void MapToRam(int flag)				//Function to map the external hex file contents into
 		PrintRam(0,filesize);
 }
 
-void UpdateSreg()			//Function to update Zero and Signed bit of SREG
-{
-	int i,t=0;
-	for(i=0;i<8;i++)
-	{
-	    if(bin[2].arr[i]==0)
-	        	t++;
-	}
-	if(t == 8)
-	{
-	    SREG[1].data = 1;
-	    //printf("\nZero bit is set\n");	
-	}
-	else
-	{
-	    SREG[1].data = 0;
-	    //printf("\nZero bit is set\n");	
-	}
-
-	SREG[4].data = SREG[2].data ^ SREG[3].data;
-	//Signed bit is exor of Negative and Overflow bits
-	if(SREG[4].data == 1)
-	{
-		//printf("\nSigned bit is set\n");
-	}
-	else
-	{
-		//printf("\nSigned bit is reset\n");
-	}
-
-}
-
 void input(int in_Val)
 {
 	IOREG[0x16].data = in_Val;
@@ -357,6 +262,10 @@ void timer(int flag)
 			OC0A_Con = 1;
 		else
 			OC0A_Con = 0;
+		temp = IOREG[0x38].data & 0xC0;
+		// For non-inverting operation
+		if(FastMode==1 && temp == 0xC0)
+			IOREG[0x38].data = IOREG[0x38].data | 0x10;
 
 		// Incrementing counter TCNT0
 		if(IOREG[0x32].data < 255)
@@ -403,42 +312,69 @@ void Compute()			//Function that performs main computation based on current inst
 	if (debugMode==1)
 		printf("instruction:%X%X%X%X\n",b1,b2,b3,b4);
 
-//	ADD by AJ		date
+//	ADD by AJ		10/05/20
 	if(b1==0x0 && b2>=12 && b2<=15)
-	{	//unsigned char r =(b2[1])*16+b3
-               // unsigned char r =(b2[0])*16+b4
-		int a=GPR[b3+16].data,b=GPR[b4+16].data;
+	{	
 		if(debugMode==1)
+			printf("\nADD instruction decoded\n");
+		int dbits[5],rbits[5],Rd=0,Rr=0;
+		//For finding Rd and Rr
+		Hex2Bin(0,b2);
+		Hex2Bin(1,b3);
+		Hex2Bin(2,b4);
+		rbits[4] = bin[0].arr[1];
+		dbits[4] = bin[0].arr[0];
+		for(i=0;i<4;i++)
 		{
-			printf("ADD instruction decoded\n");
-			printf("\nBefore execution: Reg[%d] = %x\n",b3+16,GPR[b3+16].data);
+			dbits[i] = bin[1].arr[i];
+			rbits[i] = bin[2].arr[i];
 		}
+		for(i=0;i<5;i++)
+			{
+				Rd += dbits[i]*pow(2,i);
+				Rr += rbits[i]*pow(2,i);
+			}
+		ClearBins(0); ClearBins(1); ClearBins(2);
+		if(debugMode == 1)
+			printf("\nBefore execution\nReg[%d] = %X\nReg[%d] = %X\n",Rd,GPR[Rd].data,Rr,GPR[Rr].data);			
+		//For finding sum
+		Hex2Bin(0,GPR[Rd].data);
+		Hex2Bin(1,GPR[Rr].data);
+		Hex2Bin(2,GPR[Rd].data+GPR[Rr].data);
 
-		ClearBins(0);
-		Hex2Bin(0,a); 
-		ClearBins(1);
-		Hex2Bin(1,b);
-		ClearBins(2);
+		//For setting SREG bits
+		//For setting Carry flag bit
+		SREG[0].data = (bin[0].arr[7]&bin[1].arr[7]) | (bin[1].arr[7]&!bin[2].arr[7]) |
+						(!bin[2].arr[7]&bin[0].arr[7]);
+		//For setting Zero flag bit
+		SREG[1].data = !bin[2].arr[0] & !bin[2].arr[1] & !bin[2].arr[2] & !bin[2].arr[3] &
+						!bin[2].arr[4] & !bin[2].arr[5] & !bin[2].arr[6] & !bin[2].arr[7];
+		//For setting Negative flag bit
+		SREG[2].data = bin[2].arr[7];
+		//For setting Overflow flag bit
+		SREG[3].data = (bin[0].arr[7]&bin[1].arr[7]&!bin[2].arr[7]) |
+						(!bin[0].arr[7]&!bin[1].arr[7]&bin[2].arr[7]);
+		//For setting Signed bit
+		SREG[4].data = SREG[2].data ^ SREG[3].data;
+		//For setting Half Carry flag bit
+		SREG[5].data = (bin[0].arr[3]&bin[1].arr[3]) | (bin[1].arr[3]&!bin[2].arr[3]) |
+						(!bin[2].arr[3]&bin[0].arr[3]);
 
-		Bin_Add(0,1,2,0,0);
-
-	    UpdateSreg();
-
-		GPR[b3+16].data += GPR[b4+16].data;
+		//Rd = Rd + Rr
+		GPR[Rd].data += GPR[Rr].data;
 
 		if(debugMode==1)
-		{
-			printf("\nAfter execution Reg[%d] = %x\n",b3+16,GPR[b3+16].data);
-		}
+			printf("\nAfter execution\nReg[%d] = %X\nReg[%d] = %X\n",Rd,GPR[Rd].data,Rr,GPR[Rr].data);
+
+		ClearBins(0); ClearBins(1); ClearBins(2);			
+
 		PC += 0x2;
 	}
 
 /************************************************************************************************/	
 //	ADC by AJ		10/05/20
 	else if(b1==0x1 && b2>=12 && b2<=15)
-	{	SREG[0].data=1;				// for testing
-		GPR[17].data=0x19;			// for testing
-		GPR[0].data=0x88;			// for testing
+	{
 		
 		if(debugMode==1)
 			printf("\nADC instruction decoded\n");
@@ -497,95 +433,187 @@ void Compute()			//Function that performs main computation based on current inst
 	}
 
 /************************************************************************************************/
-//	SUB by AJ		date
-	else if(b1==0x1 && b2 >= 8 && b2 <= 11)
+//	SUB by AJ		10/05/20
+	else if(b1==0x1 && b2 >= 0x08 && b2 <= 0x0B)
 	{
-		int a=GPR[b3+16].data,b=GPR[b4+16].data;
 		if(debugMode==1)
+			printf("\nSUB instruction decoded\n");
+		int dbits[5],rbits[5],Rd=0,Rr=0;
+		//For finding Rd and Rr
+		Hex2Bin(0,b2);
+		Hex2Bin(1,b3);
+		Hex2Bin(2,b4);
+		rbits[4] = bin[0].arr[1];
+		dbits[4] = bin[0].arr[0];
+		for(i=0;i<4;i++)
 		{
-			PrintReg(15,32);
-			printf("SUB instruction decoded\n");
+			dbits[i] = bin[1].arr[i];
+			rbits[i] = bin[2].arr[i];
 		}
-		ClearBins(0);
-		Hex2Bin(0,a); 
-		ClearBins(1);
-		Hex2Bin(1,b);
-		TwosComp(1);
-		ClearBins(2);
+		for(i=0;i<5;i++)
+			{
+				Rd += dbits[i]*pow(2,i);
+				Rr += rbits[i]*pow(2,i);
+			}
+		ClearBins(0); ClearBins(1); ClearBins(2);
+		if(debugMode == 1)
+			printf("\nBefore execution\nReg[%d] = %X\nReg[%d] = %X\n",Rd,GPR[Rd].data,Rr,GPR[Rr].data);			
+		//For finding difference
+		Hex2Bin(0,GPR[Rd].data);
+		Hex2Bin(1,GPR[Rr].data);
+		//Rd = Rd - Rr
+		GPR[Rd].data -= GPR[Rr].data;
+		Hex2Bin(2,GPR[Rd].data);
 
-		Bin_Add(0,1,2,1,0);
+		//For setting SREG
+		//For setting Carry flag bit
+		SREG[0].data = (!bin[0].arr[7]&bin[1].arr[7]) | (bin[1].arr[7]&bin[2].arr[7]) |
+						(bin[2].arr[7]&!bin[0].arr[7]);
+		//For setting Zero flag bit
+		SREG[1].data = !bin[2].arr[0] & !bin[2].arr[1] & !bin[2].arr[2] & !bin[2].arr[3] &
+						!bin[2].arr[4] & !bin[2].arr[5] & !bin[2].arr[6] & !bin[2].arr[7];
+		//For setting Negative flag bit
+		SREG[2].data = bin[2].arr[7];
+		//For setting Overflow flag bit
+		SREG[3].data = (bin[0].arr[7]&!bin[1].arr[7]&!bin[2].arr[7]) |
+						(!bin[0].arr[7]&bin[1].arr[7]&bin[2].arr[7]);
+		//For setting Signed bit
+		SREG[4].data = SREG[2].data ^ SREG[3].data;
+		//For setting Half Carry flag bit
+		SREG[5].data = (!bin[0].arr[3]&bin[1].arr[3]) | (bin[1].arr[3]&bin[2].arr[3]) |
+						(bin[2].arr[3]&!bin[0].arr[3]);
 
-		UpdateSreg();
-
-		GPR[b3+16].data -= GPR[b4+16].data;
 		if(debugMode==1)
-		{
-			printf("\nAfter Operation - \n");
-			PrintReg(15,32);
-		}
+			printf("\nAfter execution\nReg[%d] = %X\nReg[%d] = %X\n",Rd,GPR[Rd].data,Rr,GPR[Rr].data);
+
+		ClearBins(0); ClearBins(1); ClearBins(2);			
+
 		PC += 0x2;
 	}
 
 /************************************************************************************************/
-//	SUBI by AJ		date
+//	SUBI by AJ		10/05/20
 	else if(b1==0x5)
 	{
-		int a=b2*16 + b4,b=GPR[b3+16].data;
 		if(debugMode==1)
-		{
-			printf("SUBI instruction decoded\n");
-			PrintReg(15,32);
-		}
+			printf("\nSUBI instruction decoded\n");
+		int dbits[4],Kbits[8],Rd=0;
+		unsigned char K=0x0;
+		//For finding Rd and K
+		Hex2Bin(0,b2);
+		printf("\n");	
+		Hex2Bin(1,b3);
+		Hex2Bin(2,b4);
+		for(i=0;i<4;i++)
+			dbits[i] = bin[1].arr[i];
+		for(i=0;i<4;i++)
+			{
+				Kbits[i] = bin[2].arr[i];
+				Kbits[i+4] = bin[0].arr[i];
+			}
+		for(i=0;i<4;i++)
+				Rd += dbits[i]*pow(2,i);
+		for(i=0;i<8;i++)
+				K += Kbits[i]*pow(2,i);
+		//Since this SUBI can address R16 to R32
+			Rd += 16;
+		ClearBins(0); ClearBins(1); ClearBins(2);
 
-		ClearBins(0);
-		Hex2Bin(0,a); 
-		ClearBins(1);
-		Hex2Bin(1,b);
-		TwosComp(0);
-		ClearBins(2);
+		if(debugMode == 1)
+			printf("\nBefore execution\nReg[%d] = %X\nK = %X\n",Rd,GPR[Rd].data,K);			
+		//For finding difference
+		Hex2Bin(0,GPR[Rd].data);
+		Hex2Bin(1,K);
+		//Rd = Rd - K
+		GPR[Rd].data -= K;
+		Hex2Bin(2,GPR[Rd].data);
 
-		Bin_Add(1,0,2,1,0);
+		//For setting SREG
+		//For setting Carry flag bit
+		SREG[0].data = (!bin[0].arr[7]&bin[1].arr[7]) | (bin[1].arr[7]&bin[2].arr[7]) |
+						(bin[2].arr[7]&!bin[0].arr[7]);
+		//For setting Zero flag bit
+		SREG[1].data = !bin[2].arr[0] & !bin[2].arr[1] & !bin[2].arr[2] & !bin[2].arr[3] &
+						!bin[2].arr[4] & !bin[2].arr[5] & !bin[2].arr[6] & !bin[2].arr[7];
+		//For setting Negative flag bit
+		SREG[2].data = bin[2].arr[7];
+		//For setting Overflow flag bit
+		SREG[3].data = (bin[0].arr[7]&!bin[1].arr[7]&!bin[2].arr[7]) |
+						(!bin[0].arr[7]&bin[1].arr[7]&bin[2].arr[7]);
+		//For setting Signed bit
+		SREG[4].data = SREG[2].data ^ SREG[3].data;
+		//For setting Half Carry flag bit
+		SREG[5].data = (!bin[0].arr[3]&bin[1].arr[3]) | (bin[1].arr[3]&bin[2].arr[3]) |
+						(bin[2].arr[3]&!bin[0].arr[3]);
 
-		UpdateSreg();
-
-		GPR[b3+16].data -= a;
 		if(debugMode==1)
-		{
-			printf("\nAfter Operation - \n");
-			PrintReg(15,32);
-		}
-		PC += 0x2;
+			printf("\nAfter execution\nReg[%d] = %X\n",Rd,GPR[Rd].data);
 
+		ClearBins(0); ClearBins(1); ClearBins(2);			
+
+		PC += 0x2;	
 	}
 
 /************************************************************************************************/
-//	SBCI by AJ		date
+//	SBCI by AJ		10/05/20
 	else if(b1==0x4)
 	{
-		int a=b2*16 + b4,b=GPR[b3+16].data;
 		if(debugMode==1)
-		{
-			printf("SBCI instruction decoded\n");
-			PrintReg(15,32);
-		}
+			printf("\nSUBCI instruction decoded\n");
+		int dbits[4],Kbits[8],Rd=0;
+		unsigned char K=0x0;
+		//For finding Rd and K
+		Hex2Bin(0,b2);
+		printf("\n");	
+		Hex2Bin(1,b3);
+		Hex2Bin(2,b4);
+		for(i=0;i<4;i++)
+			dbits[i] = bin[1].arr[i];
+		for(i=0;i<4;i++)
+			{
+				Kbits[i] = bin[2].arr[i];
+				Kbits[i+4] = bin[0].arr[i];
+			}
+		for(i=0;i<4;i++)
+				Rd += dbits[i]*pow(2,i);
+		for(i=0;i<8;i++)
+				K += Kbits[i]*pow(2,i);
+		//Since this SUBI can address R16 to R32
+			Rd += 16;
+		ClearBins(0); ClearBins(1); ClearBins(2);
 
-		ClearBins(0);
-		Hex2Bin(0,a); 
-		ClearBins(1);
-		Hex2Bin(1,b);
-		TwosComp(0);
-		ClearBins(2);
+		if(debugMode == 1)
+			printf("\nBefore execution\nReg[%d] = %X\nK = %X\n",Rd,GPR[Rd].data,K);			
+		//For finding difference
+		Hex2Bin(0,GPR[Rd].data);
+		Hex2Bin(1,K);
+		//Rd = Rd - K - Carry flag bit (SREG[0])
+		GPR[Rd].data -= K + SREG[0].data;
+		Hex2Bin(2,GPR[Rd].data);
 
-		Bin_Add(1,0,2,1,1);
+		//For setting SREG
+		//For setting Carry flag bit
+		SREG[0].data = (!bin[0].arr[7]&bin[1].arr[7]) | (bin[1].arr[7]&bin[2].arr[7]) |
+						(bin[2].arr[7]&!bin[0].arr[7]);
+		//For setting Zero flag bit
+		SREG[1].data = !bin[2].arr[0] & !bin[2].arr[1] & !bin[2].arr[2] & !bin[2].arr[3] &
+						!bin[2].arr[4] & !bin[2].arr[5] & !bin[2].arr[6] & !bin[2].arr[7];
+		//For setting Negative flag bit
+		SREG[2].data = bin[2].arr[7];
+		//For setting Overflow flag bit
+		SREG[3].data = (bin[0].arr[7]&!bin[1].arr[7]&!bin[2].arr[7]) |
+						(!bin[0].arr[7]&bin[1].arr[7]&bin[2].arr[7]);
+		//For setting Signed bit
+		SREG[4].data = SREG[2].data ^ SREG[3].data;
+		//For setting Half Carry flag bit
+		SREG[5].data = (!bin[0].arr[3]&bin[1].arr[3]) | (bin[1].arr[3]&bin[2].arr[3]) |
+						(bin[2].arr[3]&!bin[0].arr[3]);
 
-		UpdateSreg();
-
-		GPR[b3+16].data -= a - SREG[0].data;
 		if(debugMode==1)
-		{
-			printf("\nAfter Operation - \n");
-			PrintReg(15,32);
-		}
+			printf("\nAfter execution\nReg[%d] = %X\n",Rd,GPR[Rd].data);
+
+		ClearBins(0); ClearBins(1); ClearBins(2);			
+
 		PC += 0x2;
 	}
 
@@ -710,6 +738,9 @@ void Compute()			//Function that performs main computation based on current inst
 	}
 
 /************************************************************************************************/
+
+
+/************************************************************************************************/
 //	LDI by AJ		date
 	else if(b1==0xE)								
 	{
@@ -717,88 +748,6 @@ void Compute()			//Function that performs main computation based on current inst
 			printf("LDI instruction decoded\n");
 		GPR[b3+16].data = b2*16 + b4;
 		PC += 0x2;
-	}
-
-/************************************************************************************************/	
-//	SBI by SM 	07/05/20
-	else if(b1==0x9 && b2==0xA)
-	{	
-		IOREG[21].data=0x00;                          //for testing opcode=9AA9  set 1th bit A=21		
-		char b,bits; 
-	    	if (b4>7){
-			b=b4-8;
-			     }
-	    	else
-			b=b4;
-	        char A= b3*2 + (b4>>3);
-		if(debugMode==1){
-	    		printf("SBI instruction decoded\n");
-			printf("\nBefore execution: Reg[%d] = %d\n",A,IOREG[A].data);
-				}
-
-	    if(b==0)
-		bits=1;
-	    if(b==1)
-		bits=2;
-	    if(b==2)
-		bits=4;
-	    if(b==3)
-		bits=8;
-	    if(b==4)
-		bits=16;
-	    if(b==5)
-		bits=32;
-	    if(b==6)
-		bits=64;
-	    if(b==7)
-		bits=128;
- 
-	    IOREG[A].data = IOREG[A].data | bits;
-
-	    if (debugMode==1)
-		printf("\nAfter execution: Reg[%d] = %d\n",A,IOREG[A].data);
-	    PC += 0x2;
-	}
-
-/************************************************************************************************/	
-//	CBI by SM 	07/05/20
-	else if(b1==0x9 && b2==8)
-	{	 
-		IOREG[20].data=0xff;                          //for testing  98A2  clears 2nd bit A=20	
-		char b,bits;
-	    	if (b4>7){
-			b=b4-8;
-			     }
-	    	else
-			b=b4;
-	        char A= b3*2 + (b4>>3);
-		if(debugMode==1){
-	    		printf("CBI instruction decoded\n");
-			printf("\nBefore execution: Reg[%d] = %d\n",A,IOREG[A].data);
-				}
-
-	    if(b==0)
-		bits=0xfe;
-	    if(b==1)
-		bits=0xfd;
-	    if(b==2)
-		bits=0xfb;
-	    if(b==3)
-		bits=0xf7;
-	    if(b==4)
-		bits=0xef;
-	    if(b==5)
-		bits=0xdf;
-	    if(b==6)
-		bits=0xbf;
-	    if(b==7)
-		bits=0x7f;
- 
-	    IOREG[A].data = IOREG[A].data & bits;
-
-	    if (debugMode==1)
-		printf("\nAfter execution: Reg[%d] = %d\n",A,IOREG[A].data);
-	    PC += 0x2;
 	}
 
 /************************************************************************************************/	
@@ -810,7 +759,19 @@ void Compute()			//Function that performs main computation based on current inst
 	    SREG[0].data = 0;
 	    PC += 0x2;
 	}
+/************************************************************************************************/	
+//	CP by SB		27/03/20
+//	Modified by AJ	5/4/20
+	else if(b1==0x1 && b2>=4 && b2<=7)
+	{
+		if(debugMode==1)
+	    	printf("CP instruction decoded\n");
+	    //Comparing Rd and Rr (Reg data doesn't have to be modified)
+	    if(GPR[b3+16].data - GPR[b4+16].data == 0)
+	    	SREG[0].data = 0;
 
+	    PC += 0x2;
+	}
 /************************************************************************************************/	
 //	CLH by SB		30/03/20
 //	Modified by AJ	5/4/20
@@ -836,13 +797,11 @@ void Compute()			//Function that performs main computation based on current inst
 /************************************************************************************************/	
 //	CLN by SB		30/03/20
 //	Modified by AJ	5/4/20
-
 	else if(b1==0x9 && b2==4 && b3==0xA && b4==8)
 	{
 		if(debugMode==1)
 	    	printf("CLN instruction decoded\n");
-//      Changed Here
-	    SREG[2].data = 0;
+	    SREG[5].data = 0;
 	    PC += 0x2;
 	}	
 
@@ -890,12 +849,13 @@ void Compute()			//Function that performs main computation based on current inst
 	    PC += 0x2;
 	}
 
+
 /************************************************************************************************/
 //      ICALL BY SM   on  14/05/20 
 
 	else if(b1==0x9 && b2==0x5 && b3==0 && b4==0x9)
 	{	
-		GPR[30].data=0X6;		//for testing
+		// GPR[30].data=0X6;		for testing
            if(debugMode==1)
            	printf("ICALL instruction decoded\n");
 
@@ -915,7 +875,7 @@ void Compute()			//Function that performs main computation based on current inst
 
 	else if(b1==0x9 && b2==0x4 && b3==0 && b4==0x9)
 	{
-		GPR[30].data=0X0;		//for testing
+		// GPR[30].data=0X0;		for testing
            if(debugMode==1)
            	printf("IJMP instruction decoded\n");
 
@@ -923,12 +883,95 @@ void Compute()			//Function that performs main computation based on current inst
 
 	}
 
+
+/************************************************************************************************/	
+//	SBI by SM 	07/05/20
+	else if(b1==0x9 && b2==0xA)
+	{	
+		// IOREG[21].data=0x00;                          //for testing opcode=9AA9  set 1th bit A=21		
+		char b,bits; 
+	    	if (b4>7){
+			b=b4-8;
+			     }
+	    	else
+			b=b4;
+	        char A= b3*2 + (b4>>3);
+		if(debugMode==1){
+	    		printf("SBI instruction decoded\n");
+			printf("\nBefore execution: Reg[%d] = %d\n",A,IOREG[A].data);
+				}
+
+	    if(b==0)
+		bits=1;
+	    if(b==1)
+		bits=2;
+	    if(b==2)
+		bits=4;
+	    if(b==3)
+		bits=8;
+	    if(b==4)
+		bits=16;
+	    if(b==5)
+		bits=32;
+	    if(b==6)
+		bits=64;
+	    if(b==7)
+		bits=128;
+ 
+	    IOREG[A].data = IOREG[A].data | bits;
+
+	    if (debugMode==1)
+		printf("\nAfter execution: Reg[%d] = %d\n",A,IOREG[A].data);
+	    PC += 0x2;
+	}
+
+/************************************************************************************************/	
+//	CBI by SM 	07/05/20
+	else if(b1==0x9 && b2==8)
+	{	 
+		// IOREG[20].data=0xff;                          //for testing  98A2  clears 2nd bit A=20	
+		char b,bits;
+	    	if (b4>7){
+			b=b4-8;
+			     }
+	    	else
+			b=b4;
+	        char A= b3*2 + (b4>>3);
+		if(debugMode==1){
+	    		printf("CBI instruction decoded\n");
+			printf("\nBefore execution: Reg[%d] = %d\n",A,IOREG[A].data);
+				}
+
+	    if(b==0)
+		bits=0xfe;
+	    if(b==1)
+		bits=0xfd;
+	    if(b==2)
+		bits=0xfb;
+	    if(b==3)
+		bits=0xf7;
+	    if(b==4)
+		bits=0xef;
+	    if(b==5)
+		bits=0xdf;
+	    if(b==6)
+		bits=0xbf;
+	    if(b==7)
+		bits=0x7f;
+ 
+	    IOREG[A].data = IOREG[A].data & bits;
+
+	    if (debugMode==1)
+		printf("\nAfter execution: Reg[%d] = %d\n",A,IOREG[A].data);
+	    PC += 0x2;
+	}
+
 /************************************************************************************************/ 
 //      ASR BY SM   on  06/05/20          Modified on 9/05/20
         else if(b1==0x9 && b2>=4 && b4==5)
         {	
-		GPR[17].data=0x19;
-		GPR[0].data=0x88;
+		//GPR[17].data=0x19;			for testing
+		//GPR[0].data=0x88;			for testing
                 unsigned char k=(b2&1)*16+b3;
            	if(debugMode==1){
            		printf("ASR instruction decoded\n");
@@ -959,19 +1002,19 @@ void Compute()			//Function that performs main computation based on current inst
  
 //      ROL BY SM   on    13/05/20         same as ADC
         else if(b1==0x1 && b2>=0xC && ((b2&1)*16+b3)==(((b2>>1)&1)*16+b4))
-        {	SREG[0].data=1;				// for testing
-		GPR[17].data=0x19;			// for testing
-		GPR[0].data=0x88;			// for testing
+        {	//SREG[0].data=1;
+		//GPR[17].data=0x19;
+		//GPR[0].data=0x88;
+
                 unsigned char k=(b2&1)*16+b3;
 	        unsigned char r=((b2>>1)&1)*16+b4;
            	if(debugMode==1){
-           		printf("ROL instruction decoded\n");
-			printf("\nCarry Flag=%d\n",SREG[0].data);
-                	printf("\nBefore execution: Reg[%d] = %x\n",k,GPR[k].data);
+           		printf("ROR instruction decoded\n");
+                	printf("\nBefore execution: Reg[%d] = %d\n",k,GPR[k].data);
                 }
                 
                 unsigned char zbit=SREG[0].data;            
-                SREG[0].data=(GPR[k].data & 10000000) >> 7;
+                SREG[0].data=GPR[k].data & 10000000;
 	    	GPR[k].data=((GPR[k].data) << 1);
 		GPR[k].data=GPR[k].data + zbit;
 
@@ -988,7 +1031,7 @@ void Compute()			//Function that performs main computation based on current inst
 		SREG[4].data=SREG[3].data ^ SREG[2].data;	//signed flag
 
                 PC += 0x2;
-                printf("\nAfter execution: Reg[%d] = %x\n",k,GPR[k].data);
+                printf("\nAfter execution: Reg[%d] = %d\n",k,GPR[k].data);
         }
 
 /************************************************************************************************/
@@ -1006,8 +1049,8 @@ void Compute()			//Function that performs main computation based on current inst
                 printf("\nAfter execution: Reg[%d] = %x\n",b3+16,GPR[b3+16].data);
         }
 
-/***********************************************************************************************
-//      CLR BY SM  on   5/05/20      Modified on 9/05/20
+/************************************************************************************************/
+//      CLR BY SM  on   5/05/20      Modified on 9/05/20		same as EOR
         else if(b1==2 && b2>=4)
         {
 		unsigned char R=b3*16+b2;
@@ -1106,13 +1149,15 @@ void Compute()			//Function that performs main computation based on current inst
 	    PC += 0x02;
 	}
 
+
 /************************************************************************************************/	
 //	AND by SM  		12/5/20        TST also same
 
 	else if(b1==0x2 && b2>=0 && b2<=3)
 	{
-	        GPR[0].data=0x00;
-	        GPR[31].data=0xff;
+	             // GPR[0].data=0x00;
+	            // GPR[31].data=0xff;
+
 		if(debugMode==1)
 	    	printf("AND instruction decoded\n");
 
@@ -1151,8 +1196,9 @@ void Compute()			//Function that performs main computation based on current inst
 
 	else if(b1==0x2 && b2>=4 && b2<=7)
 	{
-	        GPR[0].data=0xff;
-	        GPR[31].data=0xff;
+	           // GPR[0].data=0xff;
+	            //GPR[31].data=0xff;
+
 		if(debugMode==1)
 	    	printf("EOR instruction decoded\n");
 
@@ -1193,8 +1239,9 @@ void Compute()			//Function that performs main computation based on current inst
 
 	else if(b1==0x1 && b2>=4 && b2<=7)
 	{
-	        GPR[17].data=0x99;
-	        GPR[0].data=0xf0;
+	            // GPR[17].data=0x99;
+	            // GPR[0].data=0xf0;
+
 		if(debugMode==1)
 	    	printf("CP instruction decoded\n");
 	    //Comparing Rd and Rr (Reg data doesn't have to be modified)
@@ -1250,9 +1297,10 @@ void Compute()			//Function that performs main computation based on current inst
 
 	else if(b1==0x0 && b2>=4)
 	{
-	    GPR[17].data=0x88;
-	    GPR[0].data=0x19;
-	    GPR[1].data=0x19;
+	   	// GPR[17].data=0x88;
+	    	// GPR[0].data=0x19;
+	    	// GPR[1].data=0x19;
+
 	    if(debugMode==1)
 	    printf("CPC instruction decoded\n");
             unsigned char r=((b2>>1)&1)*16+b4;
@@ -1301,12 +1349,14 @@ void Compute()			//Function that performs main computation based on current inst
 	    PC += 0x2;
 	}
 
+
 /************************************************************************************************/
 //	CPI by AJ	27/04/2020
 //      Modified by SM   11/05/2020
 	else if(b1==0x03)
 	{
-	   GPR[21].data=0xf0;
+	   //  GPR[21].data=0xf0;
+
 	   if(debugMode==1)
 	    	printf("\nCPI instruction decoded\n");
 	   unsigned char k = b2*16 + b4;
@@ -1350,6 +1400,74 @@ void Compute()			//Function that performs main computation based on current inst
 	    SREG[4].data=SREG[3].data ^ SREG[2].data;			//signed flag
 
 	    PC += 0x2;
+	}
+
+/************************************************************************************************/
+//	CPI by AJ	27/04/2020
+	else if(b1==0x03)
+	{
+	   if(debugMode==1)
+	    printf("\nCPI instruction decoded\n");
+		unsigned char k = b2*16 + b4;
+		if(debugMode == 1)
+				printf("\n%X - %X = %d\n",GPR[b3+16].data,k,GPR[b3+16].data - k);
+
+		if(GPR[b3+16].data == k)
+			{
+				zero_flag = 1;
+				printf("\nZero flag set: %d\n",SREG[1].data);
+			}
+		else if(GPR[b3+16].data != k)
+			{
+				zero_flag = 0;
+				printf("\nZero flag reset\n");
+			}
+	    PC += 0x2;
+	}
+
+/***********************************************************************************************/	
+//	COM by AJ		05/05/20
+	else if(b1==0x09 && (b2==0x05 || b2==0x04) && b4==0x0)
+	{
+		if(debugMode == 1)
+			{
+				printf("\nCOM instruction decoded\n");
+				printf("\nBEfore execution Reg[%d] = %X",b3+16,GPR[b3+16].data);
+			}
+
+		// Converting hex data contained in reg to binary for complementing
+		Hex2Bin(0,GPR[b3+16].data);
+		unsigned char temp = 0x0;
+
+		// 1's complement
+		for(i=0;i<7;i++)
+			bin[0].arr[i] = !bin[0].arr[i];
+		// Set N flag in SREG if MSB is set, reset otherwise
+		if(bin[0].arr[7] ==1)
+			SREG[2].data = 1;
+		else
+			SREG[2].data = 0;
+		// Set Z flag if result is zero
+		j=0;
+		for(i=0;i<8;i++)
+			j |= bin[0].arr[i];
+		if(j==0)
+			SREG[1].data = 1;
+		else
+			SREG[1].data = 0;
+		// C flag is always set
+		SREG[0].data = 1;
+
+		// Generating hex value from binary
+		for(i=0;i<8;i++)
+			temp += bin[0].arr[i]*pow(2,i);
+
+		GPR[b3+16].data = temp;
+		if(debugMode == 1)
+			printf("\nAfter execution Reg[%d] = %X\n",b3+16,GPR[b3+16].data);
+
+		PC += 0x02;
+
 	}
 
 /***********************************************************************************************/	
@@ -1405,7 +1523,6 @@ void Compute()			//Function that performs main computation based on current inst
 			PC += 0x2;
 	}
 
-
 /************************************************************************************************/	
 //	RJMP by AJ		date
 	else if(b1==0x0C)
@@ -1458,9 +1575,120 @@ void Compute()			//Function that performs main computation based on current inst
 
 
 /************************************************************************************************/
+//	BRNE by AJ, modified by AJ on 30/4/2020
+	else if(b1==0xf && b2>=4 && b2<=7 && (b4 == 0x09 || b4 == 0x01))
+	{
+		int kbits[7],jump=0;
+		char temp=0x0;
+		if(debugMode==1)
+			printf("\nBRNE instruction decoded\n");
+		if(zero_flag == 0)
+		{
+			//For getting Kbits
+			Hex2Bin(0,b2);
+			Hex2Bin(1,b3);
+			Hex2Bin(2,b4);
+			kbits[6] = bin[0].arr[0];
+			kbits[5] = bin[0].arr[1];
+			for(i=0;i<4;i++)
+				kbits[i+1] = bin[1].arr[i];
+			kbits[0] = bin[2].arr[3];
+
+			if(kbits[6] == 1)	//Signed bit set (k is negative)
+			{
+				for(i=0;i<6;i++)
+					temp += kbits[i]*pow(2,i);
+				temp -= 0x01;
+				i=0;
+				while(temp!=0 && i<=6)
+				{
+					kbits[i] = temp % 2;
+					i++;
+					temp /= 2;
+				}
+				for(i=0;i<6;i++)
+					kbits[i] = !kbits[i];
+
+				for(i=0;i<6;i++)
+					jump += kbits[i]*pow(2,i);
+				jump *= -2;
+			}
+			else
+			{
+				for(i=0;i<6;i++)
+					jump += kbits[i]*pow(2,i);
+				jump *= 2;
+			}
+			if(debugMode == 1)
+				printf("\nJumping to PC: %X",PC+jump+0x02);
+			PC += jump + 0x02;
+
+		}
+		else
+			PC += 0x2;
+
+	}
+
+/************************************************************************************************/
+//	BREQ by AJ		27/04/20
+	else if(b1==0xf && b2>=3 && (b4==0x01||b4==0x09))
+	{
+		if(debugMode == 1)
+			printf("\nBREQ instruction decoded\n");
+		int kbits[7],jump=0;
+		char temp=0x0;
+		if(SREG[1].data == 1)
+		{
+			// For getting Kbits
+			Hex2Bin(0,b2);
+			Hex2Bin(1,b3);
+			Hex2Bin(2,b4);
+			kbits[6] = bin[0].arr[0];
+			kbits[5] = bin[0].arr[1];
+			for(i=0;i<4;i++)
+				kbits[i+1] = bin[1].arr[i];
+			kbits[0] = bin[2].arr[3];
+
+			if(kbits[6] == 1)	//Signed bit set (k is negative)
+			{
+				for(i=0;i<6;i++)
+					temp += kbits[i]*pow(2,i);
+				temp -= 0x01;
+				i=0;
+				while(temp!=0 && i<=6)
+				{
+					kbits[i] = temp % 2;
+					i++;
+					temp /= 2;
+				}
+				for(i=0;i<6;i++)
+					kbits[i] = !kbits[i];
+
+				for(i=0;i<6;i++)
+					jump += kbits[i]*pow(2,i);
+				jump *= -2;
+			}
+			else
+			{
+				for(i=0;i<6;i++)
+					jump += kbits[i]*pow(2,i);
+				jump *= 2;
+			}
+			if(debugMode == 1)
+				printf("\nJumping to PC: %X",PC+jump+0x02);
+			PC += jump + 0x02;
+		}
+	else
+		PC += 0x2;
+
+		ClearBins(0); ClearBins(1); ClearBins(2);
+
+	}
+
+/************************************************************************************************/
 //	BRCC by SM		 07/5/2020           BRSH also same
 	else if(b1==0xf && b2>=4 && b2<=7 && (b4 == 0x08 || b4 == 0x00))
-	{	PC=0x3A;					//JUMP TO 2A,OPCODE=F448 K=9
+	{	//PC=0x3A;					//JUMP TO 2A,OPCODE=F448 K=9
 		int kbits[7],jump=0;
 		char temp=0x0;
 		if(debugMode==1)
@@ -1515,8 +1743,8 @@ void Compute()			//Function that performs main computation based on current inst
 /************************************************************************************************/
 //	BRCS by SM		 07/5/2020		BRLO same
 	else if(b1==0xf && b2>=0 && b2<=3 && (b4 == 0x08 || b4 == 0x00))
-	{	PC=0x3A;					//JUMP TO 2A,OPCODE=F048 K=9
-		SREG[0].data = 1;		
+	{	//PC=0x3A;					//JUMP TO 2A,OPCODE=F048 K=9
+		//SREG[0].data = 1;		
 		int kbits[7],jump=0;
 		char temp=0x0;
 		if(debugMode==1)
@@ -1569,10 +1797,10 @@ void Compute()			//Function that performs main computation based on current inst
 	}
 
 /************************************************************************************************/
-//	BRLO by SM		 11/5/2020              same as BRCS
+//	BRLO by SM		 11/5/2020
 	else if(b1==0xf && b2>=0 && b2<=3 && (b4 == 0x08 || b4 == 0x00))
-	{	PC=0x3A;					//JUMP TO 2A,OPCODE=F048 K=9
-		SREG[0].data = 1;		
+	{	//PC=0x3A;					//JUMP TO 2A,OPCODE=F048 K=9
+		//SREG[0].data = 1;		
 		int kbits[7],jump=0;
 		char temp=0x0;
 		if(debugMode==1)
@@ -1627,7 +1855,7 @@ void Compute()			//Function that performs main computation based on current inst
 /************************************************************************************************/
 //	BRHC by SM		 07/5/2020
 	else if(b1==0xf && b2>=4 && b2<=7 && (b4 == 0xD || b4 == 0x5))
-	{	PC=0x3A;						// opcode F43D jumps to 4A k=7
+	{	//PC=0x3A;						// opcode F43D jumps to 4A k=7
  		int kbits[7],jump=0;
 		char temp=0x0;
 		if(debugMode==1)
@@ -1683,8 +1911,8 @@ void Compute()			//Function that performs main computation based on current inst
 /************************************************************************************************/
 //	BRHS by SM		 07/5/2020
 	else if(b1==0xf && b2>=0 && b2<=3 && (b4 == 0xD || b4 == 0x5))
-	{	PC=0x3A;					//opcode=F03D jumps to 4A k=7
-		SREG[5].data=1;
+	{	//PC=0x3A;					//opcode=F03D jumps to 4A k=7
+		//SREG[5].data=1;
 		int kbits[7],jump=0;
 		char temp=0x0;
 		if(debugMode==1)
@@ -1738,8 +1966,8 @@ void Compute()			//Function that performs main computation based on current inst
 
 /************************************************************************************************/
 //	BRTC by SM		 13/5/2020
-	else if(b1==0xf && b2>=4 && b2<=7 && (b4 == 0x0E || b4 == 0x06))
-	{	PC=0x3A;					//JUMP TO 2A,OPCODE=F7BE K=-9
+	else if(b1==0xf && b2>=4 && b2<=7 && (b4 == 0xE || b4 == 0x6))
+	{							// opcode F43D jumps to 4A k=7
  		int kbits[7],jump=0;
 		char temp=0x0;
 		if(debugMode==1)
@@ -1795,12 +2023,12 @@ void Compute()			//Function that performs main computation based on current inst
 /************************************************************************************************/
 //	BRTS by SM		 13/5/2020
 	else if(b1==0xf && b2>=0 && b2<=3 && (b4 == 0xE || b4 == 0x6))
-	{	PC=0x3A;						//opcode=F3BE jumps to 2A k=-9
-		SREG[6].data=1;
+	{							//opcode=F03D jumps to 4A k=7
+		//SREG[6].data=1;
 		int kbits[7],jump=0;
 		char temp=0x0;
 		if(debugMode==1)
-			printf("\nBRTS instruction decoded\n");
+			printf("\nBRHS instruction decoded\n");
 		if(SREG[6].data == 1)
 		{
 			//For getting Kbits
@@ -1851,7 +2079,7 @@ void Compute()			//Function that performs main computation based on current inst
 /************************************************************************************************/
 //	BRVC by SM		 13/5/2020
 	else if(b1==0xf && b2>=4 && b2<=7 && (b4 == 0xB || b4 == 0x3))
-	{	PC=0X3A;							// opcode F43b jumps to 10 k=7
+	{								// opcode F43D jumps to 4A k=7
  		int kbits[7],jump=0;
 		char temp=0x0;
 		if(debugMode==1)
@@ -1907,68 +2135,13 @@ void Compute()			//Function that performs main computation based on current inst
 /************************************************************************************************/
 //	BRVS by SM		 13/5/2020
 	else if(b1==0xf && b2>=0 && b2<=3 && (b4 == 0xB || b4 == 0x3))
-	{						//opcode=F03b jumps to 10 k=7
-		SREG[3].data=1;				//for testing
+	{						//opcode=F03D jumps to 4A k=7
+		//SREG[3].data=1;
 		int kbits[7],jump=0;
 		char temp=0x0;
 		if(debugMode==1)
 			printf("\nBRVS instruction decoded\n");
 		if(SREG[3].data == 1)
-		{
-			//For getting Kbits
-			Hex2Bin(0,b2);
-			Hex2Bin(1,b3);
-			Hex2Bin(2,b4);
-			kbits[6] = bin[0].arr[1];
-			kbits[5] = bin[0].arr[0];
-			for(i=0;i<4;i++)
-				kbits[i+1] = bin[1].arr[i];
-			kbits[0] = bin[2].arr[3];
-
-			if(kbits[6] == 1)	//Signed bit set (k is negative)
-			{
-				for(i=0;i<6;i++)
-					temp += kbits[i]*pow(2,i);
-				temp -= 0x01;
-				i=0;
-				while(temp!=0 && i<=6)
-				{
-					kbits[i] = temp % 2;
-					i++;
-					temp /= 2;
-				}
-				for(i=0;i<6;i++)
-					kbits[i] = !kbits[i];
-
-				for(i=0;i<6;i++)
-					jump += kbits[i]*pow(2,i);
-				jump *=-2;
-			}
-			else
-			{
-				for(i=0;i<6;i++)
-					jump += kbits[i]*pow(2,i);
-				jump *= 2;
-			}
-			if(debugMode == 1)
-				printf("\nJumping to PC: %X",PC+jump+0x02);
-			PC += jump + 0x02;
-
-		}
-		else
-			PC += 0x2;
-
-	}
-
-/************************************************************************************************/
-//	BRNE by AJ, modified by AJ on 30/4/2020
-	else if(b1==0xf && b2>=4 && b2<=7 && (b4 == 0x09 || b4 == 0x01))
-	{
-		int kbits[7],jump=0;
-		char temp=0x0;
-		if(debugMode==1)
-			printf("\nBRNE instruction decoded\n");
-		if(SREG[1].data == 0)
 		{
 			//For getting Kbits
 			Hex2Bin(0,b2);
@@ -2014,23 +2187,6 @@ void Compute()			//Function that performs main computation based on current inst
 			PC += 0x2;
 
 	}
-
-/************************************************************************************************/
-//	BREQ by AJ		27/04/20
-	/*else if(b1==0xf && b2>=3 && (b4==0x01||b4==0x09))
-	{
-		if(debugMode == 1)
-			printf("\nBREQ instruction decoded\n");
-		if(SREG[1].data == 1)
-			{
-				PC = 0x34;
-				printf("\nJumping to: %X",PC+b3*16+b4);
-				PC += b3*16+b4;
-			}
-		else
-			PC += 0x2;
-
-	}*/
 
 /************************************************************************************************/
 //	CPSE by AJ		01/05/20
